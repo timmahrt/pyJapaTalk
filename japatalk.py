@@ -1,6 +1,9 @@
 
+import os
 import datetime
 from html.parser import HTMLParser
+from copy import deepcopy
+import io
 
 from pytz import timezone
 from webbot import Browser
@@ -9,6 +12,15 @@ import googleCalendar
 
 timezoneStr = 'Asia/Tokyo'
 jst = timezone(timezoneStr)
+
+THIRTY_MINUTES = datetime.timedelta(seconds=1800)
+ONE_DAY = datetime.timedelta(days=1)
+
+TEACHER = 'teacher'
+START = 'start'
+STOP = 'stop'
+
+CACHED_FILE_FN = 'cached_calendar.html'
 
 class MyHTMLParser(HTMLParser):
 
@@ -31,18 +43,47 @@ class MyHTMLParser(HTMLParser):
             self.calendarData.append(data)
 
 
-def getJapaTalkCalendar(userName, password):
-    web = Browser()
-    web.go_to('https://www.japatalk.com/login_form.php')
-    web.click(id="wID")
-    web.type(userName)
-    web.click(id="wPasswd")
-    web.type(password)
-    web.click(classname="btn-next")
-    #web.click(classname="from-cal")
-    web.go_to('https://www.japatalk.com/reservation_calendar.php')
+def getJapaTalkCalendar(userName, password, useCache=False):
+    if useCache and os.path.exists(CACHED_FILE_FN):
+        with io.open(CACHED_FILE_FN, 'r', encoding="utf-8") as fd:
+            pageSource = fd.read()
+    else:
+        web = Browser()
+        web.go_to('https://www.japatalk.com/login_form.php')
+        web.click(id="wID")
+        web.type(userName)
+        web.click(id="wPasswd")
+        web.type(password)
+        web.click(classname="btn-next")
+        #web.click(classname="from-cal")
+        web.go_to('https://www.japatalk.com/reservation_calendar.php')
+        pageSource = web.get_page_source()
 
-    return web.get_page_source()
+        if useCache:
+            with io.open(CACHED_FILE_FN, 'w', encoding="utf-8") as fd:
+                fd.write(pageSource)
+
+    return pageSource
+
+
+def chunkList(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i: i + n]
+
+
+def mergeContinuousEvents(dates):
+    returnDates = deepcopy(dates)
+    i = 0
+    while i + 1 < len(returnDates):
+        currentEvent = returnDates[i]
+        nextEvent = returnDates[i + 1]
+        if currentEvent[TEACHER] == nextEvent[TEACHER] and currentEvent[STOP] == nextEvent[START]:
+            currentEvent[STOP] = nextEvent[STOP]
+            returnDates.pop(i + 1)
+        else:
+            i += 1
+
+    return returnDates
 
 
 def parseJapaTalkCalendarPage(html):
@@ -60,15 +101,21 @@ def parseJapaTalkCalendarPage(html):
         td = html[startI:endI]
 
         parser.feed(td)
+        dateStr = parser.calendarData.pop(0)
+        year, month, day = dateStr.split("/")[1].split("'")[0].split('-')
+        parser.calendarData.pop(0)  # Unused
+        for event in chunkList(parser.calendarData, 3):
+            # url = event[0] # Unused
+            hour, minute = event[1].split(":")
+            teacher = event[2]
+            startDate = datetime.datetime(int(year), int(month), int(day), int(hour), int(minute))
+            startDate = jst.localize(startDate)
+            endDate = startDate + THIRTY_MINUTES
 
-        year, month, day = parser.calendarData[0].split("/")[1].split("'")[0].split('-')
-        hour, minute = parser.calendarData[3].split(":")
-        teacher = parser.calendarData[4]
-        date = datetime.datetime(int(year), int(month), int(day), int(hour), int(minute))
-        date = jst.localize(date)
-
-        dates.append([date, teacher])
+            dates.append({START: startDate, STOP: endDate, TEACHER: teacher})
         i = endI
+
+    dates = mergeContinuousEvents(dates)
 
     return dates
 
@@ -78,17 +125,16 @@ def fmtTime(time):
 
 
 def sendDatesToGoogleCalendar(dates):
-
-
     service = googleCalendar.loadService()
-    thirtyMinutes = datetime.timedelta(seconds=1800)
-    oneDay = datetime.timedelta(days=1)
 
     addedEvents = []
     notAddedEvents = []
-    for startTime, teacher in dates:
-        endTime = startTime + thirtyMinutes
-        yesterday = startTime - oneDay
+    for date in dates:
+        startTime = date[START]
+        endTime = date[STOP]
+        teacher = date[TEACHER]
+
+        yesterday = startTime - ONE_DAY
         reminderDate = datetime.datetime(yesterday.year, yesterday.month, yesterday.day, 21, 0, 0)
         reminderDate = jst.localize(reminderDate)
         timeDiff = startTime - reminderDate
@@ -98,14 +144,20 @@ def sendDatesToGoogleCalendar(dates):
         endTimeStr = fmtTime(endTime)
         alertMinutesBefore = timeDiff.seconds / 60.0
 
-        if googleCalendar.checkIfEventExists(service, startTimeStr, endTimeStr):
+        if googleCalendar.checkIfEventExists(service, teacher, startTimeStr, endTimeStr):
             notAddedEvents.append([teacher, startTimeStr, endTimeStr])
         else:
             addedEvents.append([teacher, startTimeStr, endTimeStr])
 
             startTimeStr = startTimeStr.split('+')
             endTimeStr = endTimeStr.split('+')
-            googleCalendar.writeEvent(service, teacher, startTimeStr, endTimeStr, alertMinutesBefore, timezoneStr)
+            googleCalendar.writeEvent(
+                service,
+                teacher,
+                startTimeStr,
+                endTimeStr,
+                alertMinutesBefore,
+                timezoneStr)
 
     if len(addedEvents) == 0:
         print("No new events detected")
@@ -124,3 +176,6 @@ if __name__ == "__main__":
     html = getJapaTalkCalendar(userName, password)
     dates = parseJapaTalkCalendarPage(html)
     sendDatesToGoogleCalendar(dates)
+    _html = getJapaTalkCalendar(_userName, _password, useCache=False)
+    _dates = parseJapaTalkCalendarPage(_html)
+    sendDatesToGoogleCalendar(_dates)
