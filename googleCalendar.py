@@ -1,3 +1,4 @@
+# coding: utf-8
 # In accordance with the original license, this work is
 # mostly adapted from
 # https://developers.google.com/calendar/quickstart/python
@@ -42,7 +43,7 @@ def loadService():
 
 
 def getEventSummary(teacher):
-    return teacher + ' skype lesson'
+    return teacher + '先生 skype lesson'
 
 
 def checkIfEventExists(service, teacher, startTime, stopTime):

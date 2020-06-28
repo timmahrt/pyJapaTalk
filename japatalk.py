@@ -1,4 +1,4 @@
-
+# coding: utf-8
 import os
 import datetime
 from html.parser import HTMLParser
@@ -173,9 +173,6 @@ def sendDatesToGoogleCalendar(dates):
 
 if __name__ == "__main__":
     # Need to specify the userName and password
-    html = getJapaTalkCalendar(userName, password)
-    dates = parseJapaTalkCalendarPage(html)
-    sendDatesToGoogleCalendar(dates)
     _html = getJapaTalkCalendar(_userName, _password, useCache=False)
     _dates = parseJapaTalkCalendarPage(_html)
     sendDatesToGoogleCalendar(_dates)
