@@ -18,9 +18,6 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.readonly',
 
 
 def loadService():
-    """Shows basic usage of the Google Calendar API.
-    Prints the start and name of the next 10 events on the user's calendar.
-    """
     creds = None
     # The file token.pickle stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -46,6 +43,7 @@ def loadService():
 
 def getEventSummary(teacher):
     return teacher + ' skype lesson'
+
 
 def checkIfEventExists(service, teacher, startTime, stopTime):
     events_result = service.events().list(calendarId='primary', timeMin=startTime,
