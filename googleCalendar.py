@@ -44,19 +44,31 @@ def loadService():
     return service
 
 
-def checkIfEventExists(service, startTime, stopTime):
+def getEventSummary(teacher):
+    return teacher + ' skype lesson'
+
+def checkIfEventExists(service, teacher, startTime, stopTime):
     events_result = service.events().list(calendarId='primary', timeMin=startTime,
                                           timeMax=stopTime,
-                                          maxResults=1, singleEvents=True,
+                                          maxResults=10, singleEvents=True,
                                           orderBy='startTime').execute()
     events = events_result.get('items', [])
 
-    return len(events) > 0
+    eventSummary = getEventSummary(teacher)
+    matchedEvents = [event for event in events if event['summary'] == eventSummary]
+
+    otherEvents = [event for event in events if event['summary'] != eventSummary]
+    if len(otherEvents) != 0:
+        print("Warning: Unmatched events occur for %s, %s" % (teacher, str(startTime)))
+        for event in otherEvents:
+            print(event['summary'])
+
+    return len(matchedEvents) > 0
 
 
 def writeEvent(service, teacher, startTime, stopTime, reminderMinutes, timeZone):
     event = {
-        'summary': teacher + ' skype lesson',
+        'summary': getEventSummary(teacher),
         'start': {
             'dateTime': startTime,
             'timeZone': timeZone,
