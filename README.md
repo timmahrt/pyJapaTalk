@@ -13,6 +13,19 @@ Before running, you'll need to download a `credentials.json` file for Google Cal
 
 [https://developers.google.com/calendar/quickstart/python](https://developers.google.com/calendar/quickstart/python)
 
+If you update token.json, please delete token.pickle to trigger regeneration of the token file, otherwise an error like
+`invalid_grant: Token has been expired or revoked.` will be shown.
+
+## Requirements
+
+webbot will install the latest version of selenium, which it is incompatible with. (should be fixed in the next release)
+
+pip install selenium==3.141.0
+pip install google-api-python-client
+pip install webbot
+pip install pytz
+pip install google_auth_oauthlib
+
 ## Usage
 
 In order to use this script, first, open `japatalk.py` and navigate to the bottom of the page.  Set `_userName` and `_password`
